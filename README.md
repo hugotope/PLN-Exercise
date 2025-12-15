@@ -1,275 +1,96 @@
-# Sallexa
+# Sallexa — Clasificador rápido de mensajes sanitarios
 
-## 📝 Descripción de la actividad
+Este repositorio contiene una solución sencilla para clasificar mensajes relacionados con salud en cuatro etiquetas (por ejemplo: `urgencia`, `síntomas`, `administrativo`, `ruido`). Está pensado como ejercicio académico/prototipo, no como sistema clínico en producción.
 
-Un centro de atención sanitaria recibe mensajes escritos por pacientes a través de WhatsApp. Tu objetivo es desarrollar un **sistema automático capaz de clasificar estos mensajes** según su naturaleza.
+**Contenido del repositorio**
 
-### Categorías a detectar:
+- `dataset.csv` — CSV con los ejemplos usados para entrenar/evaluar.
+- `src/` — Código fuente:
+	- `src/preprocess.py` — preprocesado de texto (spaCy si está disponible; fallback con NLTK o heurísticas).
+	- `src/train.py` — script para entrenar modelos, seleccionar el mejor, guardar `sallexa_model.pkl` y `vectorizer.pkl`, y generar `train_report.txt` y `confusion_matrix.csv`.
+	- `src/predict.py` — script de uso local para probar el clasificador con ejemplos.
+	- `src/api.py` — API web con FastAPI (endpoints `/predict`, `/`, `/classify`).
+- `sallexa_model.pkl`, `vectorizer.pkl` — modelo y vectorizador guardados (si fueron generados).
+- `train_report.txt`, `confusion_matrix.csv`, `confusion_matrix.png` — artefactos de evaluación.
 
-- **Síntomas**
-- **Administrativo** (citas, bajas, recetas…)
-- **Ruido / irrelevante**
-- **Urgencia potencial**
+Cómo funciona (resumen técnico)
 
-### Ejemplos:
+- Preprocesado: `src/preprocess.py` normaliza texto, elimina puntuación y stopwords, y realiza lematización si `spaCy` con `es_core_news_sm` está disponible. Si no, intenta usar `nltk` (stopwords + SnowballStemmer) o un fallback simple.
+- Vectorización: `src/train.py` usa `TfidfVectorizer` (unigramas y bigramas, `min_df=2`, `max_df=0.9`).
+- Modelos evaluados: `MultinomialNB`, `LogisticRegression`, `LinearSVC`. El script entrena sobre una partición de entrenamiento y elige el mejor basado en F1 macro sobre el conjunto de test.
+- Salidas: se guardan el modelo (`sallexa_model.pkl`) y el vectorizador (`vectorizer.pkl`), además de reportes (`train_report.txt`, matriz de confusión) y figuras.
 
-- "Tengo 39 de fiebre y me cuesta respirar" → Urgencia
-- "Necesito renovar la receta" → Administrativo
-- "A qué hora cerráis hoy?" → Administrativo
-- "Me duele la cabeza desde ayer" → Síntomas
-- "Bombardiro crocodilo" → Ruido
+Instalación y ejecución
 
-## 🧩 Tareas
+1. Crear un entorno virtual (recomendado):
 
-### **1. Preprocesamiento del texto**
-
-Implementa una función que:
-
-- pase el texto a minúsculas,
-- elimine stopwords,
-- elimine signos de puntuación,
-- lematice,
-- devuelva un texto limpio.
-
-Puedes usar **spaCy** o **NLTK**.
-
-```python
-import spacy
-nlp = spacy.load("es_core_news_sm")
-
-def preprocess(text):
-    [...]
-    return " ".join(tokens)
-
-print(preprocess("Tengo 38,5 de fiebre y me duele la cabeza desde ayer"))
-
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### **2. Construcción del dataset**
+2. Instalar dependencias:
 
-- Crea al menos **40 mensajes** etiquetados.
-- Deben aparecer todas las categorías.
-- Guarda el dataset en CSV.
-
-```python
-data = [
-    ("Tengo 38,5 de fiebre y me cuesta respirar", "urgencia"),
-    ("Necesito renovar la receta", "administrativo"),
-    ...
-]
-
-
-import pandas as pd
-df = pd.DataFrame(data, columns=["message", "label"])
-df.to_csv("dataset.csv", index=False)
-
+```powershell
+pip install -r requirements.txt
 ```
 
-### **3. Vectorización**
+3. Entrenar y guardar el modelo (genera `sallexa_model.pkl` y `vectorizer.pkl`):
 
-Elige uno:
-
-- **Bag-of-Words** con `CountVectorizer`
-- **TF-IDF**
-- **Embeddings** de spaCy
-
-```python
-from sklearn.feature_extraction.text import TfidfVectorizer
-vectorizer = TfidfVectorizer()
-X = vectorizer.fit_transform([preprocess(msg) for msg, label in data])
-y = [label for msg, label in data]
+```powershell
+python src/train.py
 ```
 
-### **4. Entrenamiento del modelo**
+4. Probar predicciones localmente (script de ejemplo):
 
-- Usa un clasificador simple:
-  - Regresión logística
-  - Naïve Bayes
-  - SVM lineal
-- Genera métricas de calidad
-  - accuracy
-  - precision, recall, F1
-  - matriz de confusión
-
-```python
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-
-# Dividir datos
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# regresión logística example
-clf = LogisticRegression()
-# Entrenamiento
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
-# Métricas
-print(classification_report(y_test, y_pred))
+```powershell
+python src/predict.py
 ```
 
-```python
-from sklearn.model_selection import train_test_split
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import classification_report
+5. Ejecutar la API web con Uvicorn (si quieres probar la interfaz web):
 
-# Dividir datos
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# naive bayes example
-clf = MultinomialNB()
-# Entrenamiento
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
-# Métricas
-print(classification_report(y_test, y_pred))
+```powershell
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
 ```
 
-```python
-from sklearn.model_selection import train_test_split
-from sklearn.svm import LinearSVC
-from sklearn.metrics import classification_report
+Luego abre `http://127.0.0.1:8000/` para el formulario web o `http://127.0.0.1:8000/predict?text=Tu+mensaje` para la API JSON. La documentación automática está en `http://127.0.0.1:8000/docs`.
 
-# Dividir datos
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+Notas prácticas
 
-# SVM lineal example
-clf = LinearSVC()
-# Entrenamiento
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
-# Métricas
-print(classification_report(y_test, y_pred))
+- Si no tienes `spaCy` y su modelo `es_core_news_sm`, el preprocesado caerá al fallback de `nltk` o a una lista reducida de stopwords. Para instalar spaCy (opcional):
+
+```powershell
+pip install spacy
+python -m spacy download es_core_news_sm
 ```
 
-> ⚠️ Nota sobre el desbalanceo de clases
->
-> Es probable que el dataset tenga más ejemplos de algunas categorías que de otras (por ejemplo, mensajes administrativos). Esto puede provocar que el modelo se sesgue hacia la clase mayoritaria.
->
-> Para mitigarlo, puedes:
->
-> - Opción 1: habilitar el modo balanceado del clasificador:
->
-> ```python
-> clf = LogisticRegression(class_weight='balanced')
-> clf = LinearSVC(class_weight='balanced')
-> ```
->
-> - Opción 2: revisar la distribución de clases antes de entrenar:
->
-> ```python
-> import collections
-> print(collections.Counter(y))
-> ```
->
-> No es obligatorio usarlo, pero sí recomendable evaluarlo.
+- `src/api.py` incluye una regla simple basada en palabras clave para detectar mensajes administrativos (p. ej. `horario`, `cita`, `receta`) antes de pasar el texto al modelo.
 
-```python
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+Precisión y evaluación
 
-sns.heatmap(confusion_matrix(y_test, y_pred), annot=True)
-plt.show()
+El entrenamiento guarda un `train_report.txt` con la siguiente información (ejemplo generado en este repositorio):
+
+```
+best_model: LogisticRegression
+best_f1_macro: 0.9990016895472014
+classes_distribution: Counter({'administrativo': 2567, 'urgencia': 2530, 'ruido': 2463, 'síntomas': 2459})
 ```
 
-### **5. Despliegue básico**
+Interpretación y limitaciones de las métricas:
 
-- Guarda `sallexa_model.pkl`.
+- El F1 macro reportado (~0.999) indica un resultado aparentemente excelente en la partición de test usada por el script. Sin embargo, esas métricas pueden estar sesgadas por:
+	- fugas de información (feature leakage) o preprocesado compartido entre train/test;
+	- un dataset que no refleja el tráfico real (diferencias en lenguaje, registros y errores humanos);
+	- evaluación en una sola partición en lugar de validación cruzada.
 
-```python
-import joblib
-joblib.dump(clf, 'sallexa_model.pkl')
-```
+- Recomendaciones para evaluar más sólidamente: aumentar el tamaño y la diversidad del dataset, usar validación cruzada estratificada, revisar la separación train/test para evitar fugas, y calcular curvas ROC/PR y calibración de probabilidades.
 
-### **6. Úsalo en producción**
+Mejoras sugeridas
 
-Crea otro proyecto/script donde cargues el modelo y hagas predicciones sobre mensajes nuevos.
+- Recolectar y etiquetar más datos reales y variados (diferentes pacientes, registros, dialectos).
+- Añadir detección de incertidumbre (p. ej. umbrales sobre probabilidades) y rutas de escalado a revisión humana.
+- Implementar pipeline de pruebas automáticas y auditoría de rendimiento por clase.
 
-```python
-import joblib
-clf = joblib.load('sallexa_model.pkl')
+Reflexión ética (máx. 10 líneas)
 
-def classify_message(message):
-    clean = preprocess(message)
-    tokens = preprocess([clean])
-    X_new = vectorizer.transform([' '.join(tokens)])
-    prediction = clf.predict(X_new)
-    return prediction[0]
-
-print(classify_message("Tengo dolor fuerte en el pecho"))
-```
-
-### **7. Prueba tu sistema**
-
-- Prueba con al menos **5 mensajes nuevos**.
-
-```python
-test_messages = [
-    "Me siento mareado y con náuseas",
-    "Quiero pedir una cita con el médico",
-    "¿Cuál es el horario de atención?",
-    "Tengo un dolor intenso en el abdomen",
-    "asdfghjkl qwertyuiop"
-]
-for msg in test_messages:
-    print(f"Mensaje: {msg} → Clasificación: {classify_message(msg)}")
-```
-
-### **8. Créale una interfaz**
-
-Puedes usar **Gradio** o **FastAPI + HTML** para crear una interfaz sencilla donde un usuario pueda escribir un mensaje y ver la clasificación.
-
-#### **Opción 1 — Gradio**
-
-```python
-import gradio as gr
-
-def bot(msg):
-    return classify_message(msg)
-
-gr.ChatInterface(bot).launch()
-```
-
-#### **Opción 2 — FastAPI + HTML**
-
-```python
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-app = FastAPI()
-templates = Jinja2Templates(directory="templates")
-@app.get("/", response_class=HTMLResponse)
-async def read_form(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-@app.post("/classify", response_class=HTMLResponse)
-async def classify(request: Request):
-    form = await request.form()
-    message = form.get("message")
-    classification = classify_message(message)
-    return templates.TemplateResponse("index.html", {"request": request, "classification": classification})
-```
-
-### **9. Crea una api**
-
-Crear un endpoint de predicción con FastAPI:
-
-```python
-GET /predict?text=...
-→ {"label": "urgencia"}
-```
-
-### **10. Reflexión ética (máx. 10 líneas)**
-
-Incluye:
-
-- ¿Es seguro usar este modelo en un entorno sanitario real?
-- ¿Qué riesgos tiene?
-- ¿Qué mejoras serían necesarias?
-
-## Entrega (obligatoria)
-
-- `notebook.ipynb` o `src/*.py` con todo el desarrollo.
-- `dataset.csv`
-- `sallexa_model.pkl`
-- `README.md` explicando tu solución.
+Este modelo es un prototipo y no debe usarse como único criterio en decisiones clínicas. El dataset y la evaluación actuales no garantizan ausencia de falsos negativos en situaciones críticas —lo que podría poner en riesgo a pacientes— ni eliminan sesgos por idioma o registro. Antes de cualquier despliegue en entorno sanitario se requieren: validación clínica independiente, ampliación y diversificación del dataset, monitoreo continuo y un mecanismo de fallback humano para casos ambiguos o potencialmente graves.

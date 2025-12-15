@@ -1,0 +1,3 @@
+best_model: LogisticRegression
+best_f1_macro: 0.9990016895472014
+classes_distribution: Counter({'administrativo': 2567, 'urgencia': 2530, 'ruido': 2463, 'síntomas': 2459})

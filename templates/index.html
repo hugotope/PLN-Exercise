@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sallexa — Chat Clasificador</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 800px;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .chat-header h1 {
+            font-size: 1.4em;
+            margin-bottom: 4px;
+        }
+
+        .chat-header p {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        /* Messages area */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* User message (right) */
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.user .bubble {
+            background: #667eea;
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+
+        /* Bot message (left) */
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message.bot .bubble {
+            background: #e8eef7;
+            color: #333;
+            border-radius: 18px 18px 18px 4px;
+            max-width: 85%;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        /* Classification badge */
+        .classification-badge {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85em;
+            margin-top: 8px;
+            text-transform: capitalize;
+        }
+
+        .urgencia {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .administrativo {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .síntomas {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .ruido {
+            background: #f5f5f5;
+            color: #616161;
+        }
+
+        /* Input area */
+        .chat-input-area {
+            background: white;
+            padding: 15px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            border-radius: 0 0 16px 16px;
+        }
+
+        .input-field {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 0.95em;
+            resize: none;
+            max-height: 80px;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background-color: #f9f9ff;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Welcome message */
+        .welcome {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+
+        .welcome h2 {
+            font-size: 1.1em;
+            margin-bottom: 8px;
+            color: #667eea;
+        }
+
+        .welcome p {
+            font-size: 0.9em;
+        }
+
+        .examples {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .example-btn {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .example-btn:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+        }
+
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+
+        @media (max-width: 500px) {
+            .chat-container {
+                max-height: 100vh;
+                border-radius: 0;
+            }
+
+            .chat-header {
+                border-radius: 0;
+            }
+
+            .chat-input-area {
+                border-radius: 0;
+            }
+
+            .message.user .bubble {
+                max-width: 95%;
+            }
+
+            .message.bot .bubble {
+                max-width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <h1>🏥 Sallexa Chat</h1>
+            <p>Clasificador de mensajes sanitarios</p>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="bubble">
+                    <strong>¡Hola! 👋</strong><br>
+                    Soy Sallexa, tu asistente de clasificación de mensajes sanitarios.<br><br>
+                    Escribe un mensaje y te ayudaré a clasificarlo en una de estas categorías:<br>
+                    <strong>Urgencia</strong> • <strong>Síntomas</strong> • <strong>Administrativo</strong> • <strong>Ruido</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input -->
+        <form method="post" action="/classify" id="chatForm" style="display: none;">
+            <input type="hidden" name="message" id="hiddenMessage">
+        </form>
+
+        <div class="chat-input-area">
+            <div class="input-field">
+                <textarea 
+                    id="messageInput"
+                    placeholder="Escribe tu mensaje aquí..."
+                    rows="1"
+                ></textarea>
+                <button type="button" class="send-btn" id="sendBtn">📤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatForm = document.getElementById('chatForm');
+        const hiddenMessage = document.getElementById('hiddenMessage');
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+        });
+
+        // Send message on Enter (Ctrl+Enter on mobile)
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Send to backend and get response
+            fetch('/classify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'message=' + encodeURIComponent(message)
+            })
+            .then(response => response.text())
+            .then(html => {
+                // Extract classification from response
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const classification = doc.querySelector('[data-classification]')?.getAttribute('data-classification');
+                
+                if (classification) {
+                    displayClassification(classification);
+                }
+            })
+            .catch(error => {
+                addMessage('❌ Error: ' + error, 'bot');
+            });
+        }
+
+        function addMessage(text, sender) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + sender;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.textContent = text;
+            
+            msgDiv.appendChild(bubble);
+            chatMessages.appendChild(msgDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function displayClassification(classification) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            
+            const badge = document.createElement('div');
+            badge.className = 'classification-badge ' + classification;
+            badge.textContent = classification.toUpperCase();
+            
+            bubble.innerHTML = '<strong>Clasificación:</strong><br>';
+            bubble.appendChild(badge);
+            
+            msgDiv.appendChild(bubble);
+            chatMessages.appendChild(msgDiv);
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
