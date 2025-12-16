@@ -1,24 +1,37 @@
-# Sallexa — Clasificador rápido de mensajes sanitarios
+# Sallexa v2.0 — Asistente Médico Conversacional con Memoria y Lógica
 
-Este repositorio contiene una solución sencilla para clasificar mensajes relacionados con salud en cuatro etiquetas (por ejemplo: `urgencia`, `síntomas`, `administrativo`, `ruido`). Está pensado como ejercicio académico/prototipo, no como sistema clínico en producción.
+Este repositorio contiene una evolución de Sallexa, ahora un asistente conversacional capaz de mantener contexto en diálogos, extraer entidades de síntomas, duración, temperatura, etc., y razonar con reglas IF-THEN para proporcionar recomendaciones o activar protocolos de urgencia. Está pensado como ejercicio académico/prototipo, no como sistema clínico en producción.
+
+**Nuevas funcionalidades en v2.0:**
+
+- **Máquina de Estados Finitos (FSM):** Gestiona el flujo de conversación (IDLE → RECABANDO_DATOS → URGENCIA/RECOMENDACIONES → FINALIZAR).
+- **Extracción de Entidades:** Usa regex y spaCy para identificar síntomas, duración, temperatura, gravedad y zona afectada.
+- **Sistema Experto:** Motor de inferencia con reglas para decidir urgencias (ej. fiebre ≥39°C → URGENCIA_ALTA) o recomendaciones.
+- **Interfaz Conversacional:** Chat web que mantiene contexto por sesión.
+- **Consideraciones Éticas:** Disclaimer legal, manejo de errores, y reflexión sobre privacidad, sesgos y responsabilidad.
 
 **Contenido del repositorio**
 
-- `dataset.csv` — CSV con los ejemplos usados para entrenar/evaluar.
+- `dataset.csv` — CSV con los ejemplos usados para entrenar/evaluar (v1.0).
 - `src/` — Código fuente:
 	- `src/preprocess.py` — preprocesado de texto (spaCy si está disponible; fallback con NLTK o heurísticas).
-	- `src/train.py` — script para entrenar modelos, seleccionar el mejor, guardar `sallexa_model.pkl` y `vectorizer.pkl`, y generar `train_report.txt` y `confusion_matrix.csv`.
-	- `src/predict.py` — script de uso local para probar el clasificador con ejemplos.
-	- `src/api.py` — API web con FastAPI (endpoints `/predict`, `/`, `/classify`).
-- `sallexa_model.pkl`, `vectorizer.pkl` — modelo y vectorizador guardados (si fueron generados).
-- `train_report.txt`, `confusion_matrix.csv`, `confusion_matrix.png` — artefactos de evaluación.
+	- `src/train.py` — script para entrenar modelos (v1.0).
+	- `src/predict.py` — script de uso local para probar el clasificador (v1.0).
+	- `src/api.py` — API web con FastAPI (endpoints `/chat`, `/`, etc. para v2.0).
+	- `src/entities.py` — Extracción de entidades con NLP.
+	- `src/dialogue.py` — Sistema experto con FSM y reglas de inferencia.
+- `sallexa_model.pkl`, `vectorizer.pkl` — modelo y vectorizador guardados (v1.0).
+- `templates/index.html` — Interfaz de chat actualizada.
+- `train_report.txt`, `confusion_matrix.csv`, `confusion_matrix.png` — artefactos de evaluación (v1.0).
 
 Cómo funciona (resumen técnico)
 
-- Preprocesado: `src/preprocess.py` normaliza texto, elimina puntuación y stopwords, y realiza lematización si `spaCy` con `es_core_news_sm` está disponible. Si no, intenta usar `nltk` (stopwords + SnowballStemmer) o un fallback simple.
-- Vectorización: `src/train.py` usa `TfidfVectorizer` (unigramas y bigramas, `min_df=2`, `max_df=0.9`).
-- Modelos evaluados: `MultinomialNB`, `LogisticRegression`, `LinearSVC`. El script entrena sobre una partición de entrenamiento y elige el mejor basado en F1 macro sobre el conjunto de test.
-- Salidas: se guardan el modelo (`sallexa_model.pkl`) y el vectorizador (`vectorizer.pkl`), además de reportes (`train_report.txt`, matriz de confusión) y figuras.
+- **v1.0 (Clasificación de mensajes sueltos):** Preprocesado, vectorización TF-IDF, modelo ML (LogisticRegression) para clasificar en 4 categorías.
+- **v2.0 (Asistente conversacional):**
+  - **Estado del diálogo:** Controla el flujo basado en intención detectada.
+  - **Extracción de slots:** Actualiza dinámicamente un diccionario de contexto con entidades extraídas.
+  - **Razonamiento:** Reglas IF-THEN para decisiones (urgencias, recomendaciones).
+  - **Respuestas:** Generadas según estado y contexto, con protocolos de emergencia.
 
 Instalación y ejecución
 
@@ -35,19 +48,29 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Entrenar y guardar el modelo (genera `sallexa_model.pkl` y `vectorizer.pkl`):
+3. Instalar modelo de spaCy (para extracción de entidades):
 
 ```powershell
-python src/train.py
+python -m spacy download es_core_news_sm
 ```
 
-4. Probar predicciones localmente (script de ejemplo):
+4. Ejecutar la API web con Uvicorn:
 
 ```powershell
-python src/predict.py
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
 ```
 
-5. Ejecutar la API web con Uvicorn (si quieres probar la interfaz web):
+Luego abre `http://127.0.0.1:8000/` para el chat conversacional. La documentación automática está en `http://127.0.0.1:8000/docs`.
+
+Ejemplos de diálogos
+
+- **Fiebre alta:** Usuario: "Tengo fiebre" → Bot: "¿Cuál es tu temperatura?" → Usuario: "39 grados" → Bot: "URGENCIA_ALTA. Llama al 112."
+- **Dolor de pecho:** Usuario: "Me duele el pecho" → Bot: "¿Desde cuándo?" → Usuario: "Desde esta mañana" → Bot: "URGENCIA_INFARTO. Llama al 112."
+- **Tos prolongada:** Usuario: "Tengo tos" → Bot: "¿Desde cuándo?" → Usuario: "Una semana" → Bot: "CITA_PREVIA con tu médico."
+
+Reflexión ética (máx. 10 líneas)
+
+Este sistema es un prototipo educativo y no debe usarse en entornos clínicos reales. Incluye disclaimer legal al iniciar conversaciones y maneja incertidumbre derivando a humanos si la confianza es baja (<60%). Privacidad: Los datos se almacenan en memoria volátil por sesión, sin persistencia (GDPR compliant en demo). Sesgos: El modelo puede no entender expresiones culturales variadas o de edades extremas. Responsabilidad: Cualquier recomendación errónea recae en el usuario final; el sistema advierte que no sustituye consejo médico profesional. Se mitiga con reglas conservadoras y fallback humano.
 
 ```powershell
 python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
@@ -57,16 +80,16 @@ Luego abre `http://127.0.0.1:8000/` para el formulario web o `http://127.0.0.1:8
 
 Notas prácticas
 
-- Si no tienes `spaCy` y su modelo `es_core_news_sm`, el preprocesado caerá al fallback de `nltk` o a una lista reducida de stopwords. Para instalar spaCy (opcional):
+- Si no tienes `spaCy` y su modelo `es_core_news_sm`, la extracción de entidades será limitada. Para instalar:
 
 ```powershell
 pip install spacy
 python -m spacy download es_core_news_sm
 ```
 
-- `src/api.py` incluye una regla simple basada en palabras clave para detectar mensajes administrativos (p. ej. `horario`, `cita`, `receta`) antes de pasar el texto al modelo.
+- El sistema mantiene contexto en memoria por sesión; resetea al finalizar conversación.
 
-Precisión y evaluación
+Precisión y evaluación (v1.0)
 
 El entrenamiento guarda un `train_report.txt` con la siguiente información (ejemplo generado en este repositorio):
 
@@ -90,7 +113,3 @@ Mejoras sugeridas
 - Recolectar y etiquetar más datos reales y variados (diferentes pacientes, registros, dialectos).
 - Añadir detección de incertidumbre (p. ej. umbrales sobre probabilidades) y rutas de escalado a revisión humana.
 - Implementar pipeline de pruebas automáticas y auditoría de rendimiento por clase.
-
-Reflexión ética (máx. 10 líneas)
-
-Este modelo es un prototipo y no debe usarse como único criterio en decisiones clínicas. El dataset y la evaluación actuales no garantizan ausencia de falsos negativos en situaciones críticas —lo que podría poner en riesgo a pacientes— ni eliminan sesgos por idioma o registro. Antes de cualquier despliegue en entorno sanitario se requieren: validación clínica independiente, ampliación y diversificación del dataset, monitoreo continuo y un mecanismo de fallback humano para casos ambiguos o potencialmente graves.

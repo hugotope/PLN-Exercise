@@ -1,9 +1,9 @@
 """
-FastAPI app para Sallexa: API de clasificación de mensajes.
+FastAPI app para Sallexa v2.0: Asistente Médico Conversacional.
 Endpoints:
-  - GET  /predict?text=... → JSON {"label": "urgencia"}
-  - POST /classify        → HTML con formulario y resultado
-  - GET  /                → Formulario HTML
+  - GET  / → Página de chat
+  - POST /chat → Procesa mensaje del usuario y devuelve respuesta del bot
+  - GET  /docs → Documentación automática
 """
 
 from fastapi import FastAPI, Request
@@ -11,27 +11,15 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
-import joblib
-from src.preprocess import preprocess
+from src.dialogue import SistemaExperto
 
-app = FastAPI(title="Sallexa", description="Clasificador de mensajes sanitarios")
+app = FastAPI(title="Sallexa v2.0", description="Asistente Médico Conversacional")
 
-# Cargar modelo y vectorizador
-ROOT = os.path.dirname(os.path.dirname(__file__))  # Parent dir (raíz del proyecto)
-MODEL_PATH = os.path.join(ROOT, "sallexa_model.pkl")
-VEC_PATH = os.path.join(ROOT, "vectorizer.pkl")
-
-try:
-    clf = joblib.load(MODEL_PATH)
-    vectorizer = joblib.load(VEC_PATH)
-    print(f"✓ Modelo cargado desde {MODEL_PATH}")
-except Exception as e:
-    print(f"✗ Error cargando modelo: {e}")
-    clf = None
-    vectorizer = None
+# Instancia global del sistema experto (para demo single-user)
+sistema = SistemaExperto()
 
 # Templates
-template_dir = os.path.join(ROOT, "templates")
+template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 if not os.path.exists(template_dir):
     os.makedirs(template_dir)
 templates = Jinja2Templates(directory=template_dir)
@@ -57,11 +45,11 @@ def classify_message(message: str) -> str:
     prediction = clf.predict(X_new)
     return prediction[0]
 
-# ENDPOINT 1: GET /predict?text=...
+# ENDPOINT 1: GET /predict?text=... (legacy)
 @app.get("/predict", response_class=JSONResponse)
 async def predict(text: str):
     """
-    Endpoint JSON para predicción rápida.
+    Endpoint JSON para predicción rápida (legacy).
     Uso: GET /predict?text=Me%20duele%20la%20cabeza
     Respuesta: {"label": "síntomas"}
     """
@@ -74,17 +62,41 @@ async def predict(text: str):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-# ENDPOINT 2: GET / - Mostrar formulario
+# ENDPOINT 2: GET / - Mostrar chat
 @app.get("/", response_class=HTMLResponse)
-async def read_form(request: Request):
-    """Muestra el formulario HTML para clasificar mensajes."""
+async def read_chat(request: Request):
+    """Muestra la interfaz de chat."""
     return templates.TemplateResponse("index.html", {"request": request})
 
-# ENDPOINT 3: POST /classify - Procesar formulario
+# ENDPOINT 3: POST /chat - Procesar mensaje del usuario
+@app.post("/chat", response_class=JSONResponse)
+async def chat(request: Request):
+    """
+    Procesa un mensaje del usuario y devuelve la respuesta del bot.
+    """
+    try:
+        form = await request.form()
+        message = form.get("message", "").strip()
+        
+        if not message:
+            return JSONResponse({"error": "Mensaje vacío"}, status_code=400)
+        
+        # Procesar con el sistema experto
+        respuesta = sistema.procesar_mensaje(message)
+        
+        return JSONResponse({
+            "respuesta": respuesta,
+            "estado": sistema.contexto_paciente["estado_actual"].name,
+            "slots": sistema.contexto_paciente["slots"]
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# ENDPOINT 4: POST /classify (legacy)
 @app.post("/classify", response_class=HTMLResponse)
 async def classify(request: Request):
     """
-    Procesa el formulario POST con un mensaje y devuelve la clasificación.
+    Endpoint legacy para compatibilidad.
     """
     try:
         form = await request.form()
@@ -93,10 +105,18 @@ async def classify(request: Request):
         if not message:
             return f"<div data-classification='error'>Error: Mensaje vacío</div>"
         
-        classification = classify_message(message)
-        return f"<div data-classification='{classification}'></div>"
+        # Usar el sistema nuevo
+        respuesta = sistema.procesar_mensaje(message)
+        return f"<div data-respuesta='{respuesta}'></div>"
     except Exception as e:
-        return f"<div data-classification='error'>Error: {str(e)}</div>"
+        return f"<div data-respuesta='Error: {str(e)}'></div>"
+
+# ENDPOINT 5: POST /reset - Resetear conversación
+@app.post("/reset", response_class=JSONResponse)
+async def reset():
+    """Resetea el contexto de la conversación."""
+    sistema.reset_contexto()
+    return JSONResponse({"message": "Conversación reseteada"})
 
 # ENDPOINT 4: GET /docs - Documentación automática (Swagger UI)
 # (FastAPI lo genera automáticamente)

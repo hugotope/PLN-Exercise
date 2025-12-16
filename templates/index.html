@@ -295,24 +295,24 @@
     <div class="chat-container">
         <!-- Header -->
         <div class="chat-header">
-            <h1>🏥 Sallexa Chat</h1>
-            <p>Clasificador de mensajes sanitarios</p>
+            <h1>🏥 Sallexa v2.0</h1>
+            <p>Asistente Médico Conversacional</p>
         </div>
 
         <!-- Messages -->
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
                 <div class="bubble">
-                    <strong>¡Hola! 👋</strong><br>
-                    Soy Sallexa, tu asistente de clasificación de mensajes sanitarios.<br><br>
-                    Escribe un mensaje y te ayudaré a clasificarlo en una de estas categorías:<br>
-                    <strong>Urgencia</strong> • <strong>Síntomas</strong> • <strong>Administrativo</strong> • <strong>Ruido</strong>
+                    <strong>¡Hola! 👋 Soy Sallexa v2.0</strong><br>
+                    Tu asistente médico conversacional con memoria y lógica.<br><br>
+                    <em>⚠️ Disclaimer: Soy un asistente automático, no un médico. No sustituyo el consejo profesional. En caso de emergencia, llama al 112.</em><br><br>
+                    ¿En qué puedo ayudarte hoy?
                 </div>
             </div>
         </div>
 
         <!-- Input -->
-        <form method="post" action="/classify" id="chatForm" style="display: none;">
+        <form method="post" action="/chat" id="chatForm" style="display: none;">
             <input type="hidden" name="message" id="hiddenMessage">
         </form>
 
@@ -361,22 +361,19 @@
             messageInput.style.height = 'auto';
 
             // Send to backend and get response
-            fetch('/classify', {
+            fetch('/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: 'message=' + encodeURIComponent(message)
             })
-            .then(response => response.text())
-            .then(html => {
-                // Extract classification from response
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const classification = doc.querySelector('[data-classification]')?.getAttribute('data-classification');
-                
-                if (classification) {
-                    displayClassification(classification);
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addMessage('❌ Error: ' + data.error, 'bot');
+                } else {
+                    addMessage(data.respuesta, 'bot');
                 }
             })
             .catch(error => {
@@ -390,32 +387,12 @@
             
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            bubble.textContent = text;
+            bubble.innerHTML = text.replace(/\n/g, '<br>');
             
             msgDiv.appendChild(bubble);
             chatMessages.appendChild(msgDiv);
             
             // Scroll to bottom
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function displayClassification(classification) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message bot';
-            
-            const bubble = document.createElement('div');
-            bubble.className = 'bubble';
-            
-            const badge = document.createElement('div');
-            badge.className = 'classification-badge ' + classification;
-            badge.textContent = classification.toUpperCase();
-            
-            bubble.innerHTML = '<strong>Clasificación:</strong><br>';
-            bubble.appendChild(badge);
-            
-            msgDiv.appendChild(bubble);
-            chatMessages.appendChild(msgDiv);
-            
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
     </script>
