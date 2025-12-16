@@ -63,6 +63,11 @@ class SistemaExperto:
         if any(kw in msg_lower for kw in admin_keywords):
             return "administrativo"
 
+        # Saludos
+        saludo_keywords = ["hola", "buenas", "buenos días", "buenas tardes", "buenas noches", "hey", "hi"]
+        if any(kw in msg_lower for kw in saludo_keywords):
+            return "saludo"
+
         return "ruido"
 
     def actualizar_slots(self, mensaje: str):
@@ -113,8 +118,10 @@ class SistemaExperto:
                 return "¿Desde cuándo tienes este síntoma? ¿Puedes darme más detalles?"
             elif intencion == "administrativo":
                 return "Para asuntos administrativos, por favor contacta con recepción al 123-456-789."
+            elif intencion == "saludo":
+                return "¡Hola! Soy Sallexa, tu asistente médico. ¿En qué puedo ayudarte hoy?"
             else:
-                return "No entiendo tu mensaje. ¿Puedes reformularlo?"
+                return "Hola, ¿en qué puedo ayudarte? Cuéntame tus síntomas o preguntas."
 
         elif estado == Estado.RECABANDO_DATOS:
             self.actualizar_slots(mensaje)
@@ -141,7 +148,12 @@ class SistemaExperto:
                 return "Por favor, llama al 112 AHORA. Es muy importante. ¿Has llamado?"
 
         elif estado == Estado.RECOMENDACIONES:
-            if "gracias" in mensaje.lower() or "ok" in mensaje.lower():
+            intencion = self.clasificar_intencion(mensaje)
+            if intencion == "síntomas" or intencion == "urgencia":
+                # Nuevo síntoma, resetear conversación
+                self.reset_contexto()
+                return self.procesar_mensaje(mensaje)  # Procesar como nuevo
+            elif "gracias" in mensaje.lower() or "ok" in mensaje.lower() or "nada" in mensaje.lower():
                 self.contexto_paciente["estado_actual"] = Estado.FINALIZAR
                 return "De nada. Si tus síntomas empeoran, no dudes en consultar de nuevo. ¡Cuídate!"
             else:
