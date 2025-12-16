@@ -11,18 +11,39 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
+import uuid
+import json
+from datetime import datetime
 from src.dialogue import SistemaExperto
 
 app = FastAPI(title="Sallexa v2.0", description="Asistente Médico Conversacional")
 
-# Instancia global del sistema experto (para demo single-user)
-sistema = SistemaExperto()
+# Instancia global de sesiones
+sessions = {}
+
+# Archivo de logs
+LOG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "conversations.log")
 
 # Templates
 template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
 if not os.path.exists(template_dir):
     os.makedirs(template_dir)
 templates = Jinja2Templates(directory=template_dir)
+
+def get_or_create_session(session_id: str) -> SistemaExperto:
+    if session_id not in sessions:
+        sessions[session_id] = SistemaExperto()
+    return sessions[session_id]
+
+def log_conversation(session_id: str, user_msg: str, bot_response: str):
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "session_id": session_id,
+        "user_message": user_msg,
+        "bot_response": bot_response
+    }
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
 def classify_message(message: str) -> str:
     """Clasifica un mensaje usando el modelo guardado."""
@@ -73,22 +94,41 @@ async def read_chat(request: Request):
 async def chat(request: Request):
     """
     Procesa un mensaje del usuario y devuelve la respuesta del bot.
+    Maneja sesiones por cookie.
     """
     try:
+        # Obtener session_id de cookie, o generar nueva
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        
         form = await request.form()
         message = form.get("message", "").strip()
         
         if not message:
             return JSONResponse({"error": "Mensaje vacío"}, status_code=400)
         
-        # Procesar con el sistema experto
+        # Obtener o crear sesión
+        sistema = get_or_create_session(session_id)
+        
+        # Procesar mensaje
         respuesta = sistema.procesar_mensaje(message)
         
-        return JSONResponse({
+        # Loggear conversación
+        log_conversation(session_id, message, respuesta)
+        
+        # Preparar respuesta
+        response_data = {
             "respuesta": respuesta,
             "estado": sistema.contexto_paciente["estado_actual"].name,
             "slots": sistema.contexto_paciente["slots"]
-        })
+        }
+        
+        # Crear respuesta con cookie
+        response = JSONResponse(response_data)
+        response.set_cookie(key="session_id", value=session_id, httponly=True)
+        
+        return response
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -113,9 +153,11 @@ async def classify(request: Request):
 
 # ENDPOINT 5: POST /reset - Resetear conversación
 @app.post("/reset", response_class=JSONResponse)
-async def reset():
+async def reset(request: Request):
     """Resetea el contexto de la conversación."""
-    sistema.reset_contexto()
+    session_id = request.cookies.get("session_id")
+    if session_id and session_id in sessions:
+        del sessions[session_id]
     return JSONResponse({"message": "Conversación reseteada"})
 
 # ENDPOINT 4: GET /docs - Documentación automática (Swagger UI)

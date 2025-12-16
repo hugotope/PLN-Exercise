@@ -8,6 +8,7 @@ Este repositorio contiene una evolución de Sallexa, ahora un asistente conversa
 - **Extracción de Entidades:** Usa regex y spaCy para identificar síntomas, duración, temperatura, gravedad y zona afectada.
 - **Sistema Experto:** Motor de inferencia con reglas para decidir urgencias (ej. fiebre ≥39°C → URGENCIA_ALTA) o recomendaciones.
 - **Interfaz Conversacional:** Chat web que mantiene contexto por sesión.
+- **Sesiones y Logs:** Cada conversación es independiente (resetea al recargar página). Se guardan logs en `conversations.log`.
 - **Consideraciones Éticas:** Disclaimer legal, manejo de errores, y reflexión sobre privacidad, sesgos y responsabilidad.
 
 **Contenido del repositorio**
